@@ -1,6 +1,9 @@
 name = "blog"
 main = "worker.js"
 compatibility_date = "2024-02-06"
+routes = [
+	{ pattern = "blog.sine.zip", custom_domain = true }
+]
 
 # This configures the worker to serve static assets from the 'dist' directory
 [site]
