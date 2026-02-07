@@ -1,0 +1,102 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\title{My Journey Implementing RSA from Scratch in C\#}
+\author{Julian}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+I've always been fascinated by cryptography and the discrete mathematics that underpins it. However, treating it as a black box felt insufficient for genuine understanding. Recently, I decided to implement RSA (Rivest–Shamir–Adleman) from scratch in C\#. The implementation required working through number theory and big integer arithmetic. This post documents what I learned during the process, with emphasis on the mathematical foundations that make RSA work.
+
+\section{The Core Math: Groups and Primes}
+
+The security of RSA relies on the intractability of the \textit{integer factorization problem}. We operate primarily in the ring of integers modulo $n$, specifically focusing on the multiplicative group of units, denoted as $\mathbb{Z}_n^*$.
+
+\subsection{Key Generation}
+My first challenge was generating the keys. Formally, the process constructs a trapdoor permutation:
+
+1. \textbf{Select two distinct large primes}, $p$ and $q$, using a probabilistic primality test.
+2. \textbf{Compute the modulus} $n = p \cdot q$. The value $n$ is used as the modulus for both the public and private keys.
+3. \textbf{Compute the totient} $\phi(n) = \text{lcm}(p-1, q-1)$. This represents the order of the group $\mathbb{Z}_n^*$.
+4. \textbf{Choose a public exponent} $e$ such that $1 < e < \phi(n)$ and $\text{gcd}(e, \phi(n)) = 1$. This ensures that $e$ has a multiplicative inverse in the ring $\mathbb{Z}_{\phi(n)}$. I chose $e = 65537$ ($2^{16} + 1$), a Fermat prime, for efficient encryption.
+5. \textbf{Compute the private exponent} $d$. We need to find $d$ satisfying the congruence:
+   \[ d \equiv e^{-1} \pmod{\phi(n)} \]
+   This is equivalent to finding the solution to the linear Diophantine equation $de + k\phi(n) = 1$.
+
+\subsection{The Extended Euclidean Algorithm: Bézout's Identity}
+Computing the modular multiplicative inverse of $e$ requires more than simple division, it requires finding coefficients that satisfy \textit{Bézout's Identity}.
+
+Bézout's identity states that for non-zero integers $a$ and $b$, there exist integers $x$ and $y$ such that:
+\[ ax + by = \text{gcd}(a, b) \]
+In our context, we map $a = e$ and $b = \phi(n)$. Since $e$ and $\phi(n)$ are coprime, $\text{gcd}(e, \phi(n)) = 1$, giving us:
+\[ ex + \phi(n)y = 1 \]
+Taking this equation modulo $\phi(n)$ eliminates the second term:
+\[ ex \equiv 1 \pmod{\phi(n)} \]
+Thus, the coefficient $x$ (from the algorithm) is our private key $d$.
+
+I implemented this iteratively by maintaining the sequence of remainders and coefficients, effectively unwinding the standard Euclidean algorithm steps to express the remainder 1 as a linear combination of inputs.
+
+\subsection{Encryption and Decryption}
+\begin{itemize}
+    \item \textbf{Encryption}: Given a message $m \in \mathbb{Z}_n$, the ciphertext $c$ is computed as:
+    \[ c \equiv m^e \pmod{n} \]
+    \item \textbf{Decryption}: We recover $m$ using Euler's Theorem ($m^{\phi(n)} \equiv 1 \pmod n$):
+    \[ c^d \equiv (m^e)^d \equiv m^{ed} \equiv m^{1 + k\phi(n)} \equiv m \cdot (m^{\phi(n)})^k \equiv m \pmod{n} \]
+\end{itemize}
+
+\section{Implementation Challenges}
+
+\subsection{Generating Primes with Miller-Rabin}
+Generating large primes requires more than brute-force iteration—the computational cost for 1024-bit primes would be prohibitive. Instead, I implemented the \textbf{Miller-Rabin Primality Test}, a probabilistic algorithm that determines whether a number is \textit{probably} prime with extremely high confidence.
+
+\begin{algorithm}
+\caption{Miller-Rabin Logic}
+\begin{algorithmic}
+\Function{IsProbablePrime}{$n, k$}
+    \State \dots (Decompose $n-1$ into $2^r \cdot d$)
+    \For{$i \gets 1$ to $k$}
+        \State Pick random $a \in [2, n-2]$
+        \State Check if $a^d \equiv 1 \pmod n$ or $a^{2^j \cdot d} \equiv -1$
+        \State If neither holds, it's composite.
+    \EndFor
+    \Return \textbf{true}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Padding: Why "Textbook RSA" is Insufficient}
+Encrypting raw data (Textbook RSA) is considered insecure in practice. Encrypting the same plaintext produces identical ciphertext, which leaks information about message patterns.
+
+To address this, I implemented \textbf{PKCS\#1 v1.5 Padding}:
+\[ \text{Block} = 00 \parallel 02 \parallel \text{PS} \parallel 00 \parallel \text{Data} \]
+The $\text{PS}$ component consists of random non-zero bytes. This randomness ensures that encrypting the same plaintext produces different ciphertext each time, providing semantic security.
+
+\section{Common Pitfalls I Encountered}
+\begin{enumerate}
+    \item \textbf{The Sign Bit}: C\#'s \texttt{BigInteger} uses the most significant bit for the sign. Valid positive numbers were being interpreted as negative when the random byte \texttt{0x80} appeared at the end, requiring explicit positive interpretation.
+    \item \textbf{Endianness}: The RFCs specify Big-Endian (Network Byte Order), while C\# defaults to Little-Endian on Intel architectures. This required explicit array reversal when converting between bytes and BigIntegers.
+    \item \textbf{Cryptographic Randomness}: Using \texttt{System.Random} compromises encryption security. The implementation requires \texttt{RandomNumberGenerator} for cryptographically secure random values. (\url{https://crypto.stackexchange.com/a/72927})
+\end{enumerate}
+
+\section{Final Thoughts}
+Implementing RSA from scratch provided insight into the underlying mathematics. While custom cryptographic implementations should never be used in production environments-established libraries like \texttt{BouncyCastle} exist for good reason-the exercise deepened my understanding of the discrete mathematics and number theory that make RSA secure.
+
+\section{Resources That Helped Me}
+For anyone wanting to dive deeper into these topics, I highly recommend the following books that were instrumental in my understanding:
+
+\begin{itemize}
+    \item \textbf{Serious Cryptography: A Practical Introduction to Modern Encryption} by Jean-Philippe Aumasson (2nd Edition). This book bridges the gap between theory and real-world practice.
+    \item \textbf{The Joy of Cryptography} by Mike Rosulek. An excellent resource that builds cryptographic intuition from first principles, with the first three chapters available freely online. (\url{https://joyofcryptography.com/})
+\end{itemize}
+
+\end{document}

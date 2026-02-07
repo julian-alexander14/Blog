@@ -1,0 +1,7 @@
+{
+  "siteTitle": "My Blog",
+  "author": "Julian",
+  "baseUrl": "https://blog.example.com",
+  "description": "A blog about cryptography, mathematics, and software engineering",
+  "footer": "{{YEAR}}"
+}
